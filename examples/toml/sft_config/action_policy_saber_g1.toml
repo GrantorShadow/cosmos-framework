@@ -1,0 +1,64 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: OpenMDW-1.1
+
+# SABER Stream 2 Unitree-G1 action-policy SFT starter configuration.
+#
+# Required environment:
+#   SABER_ROOT=/path/to/SABER-10K/SABER-stream2
+#   BASE_CHECKPOINT_PATH=<Cosmos3-Nano DCP directory>
+#   WAN_VAE_PATH=<Wan2.2_VAE.pth>
+#   IMAGINAIRE_OUTPUT_ROOT=/path/to/output_root
+
+[job]
+task       = "vfm"
+experiment = "action_policy_saber_g1_nano"
+project    = "cosmos3_action"
+group      = "action_sft"
+name       = "action_policy_saber_g1"
+wandb_mode = "online"
+
+[model]
+precision = "bfloat16"
+
+[model.parallelism]
+data_parallel_shard_degree     = 8
+data_parallel_replicate_degree = 1
+
+[model.activation_checkpointing]
+mode           = "full"
+save_ops_regex = ["fmha"]
+
+[model.tokenizer]
+vae_path = "${oc.env:WAN_VAE_PATH}"
+
+[model.rectified_flow_training_config]
+loss_scale = 10.0
+
+[optimizer]
+lr = 5.0e-05
+
+[scheduler]
+cycle_lengths = [5000]
+warm_up_steps = [500]
+
+[dataloader_train]
+max_samples_per_batch = 32
+
+[dataloader_train.dataloader]
+num_workers     = 8
+batch_size      = 8
+prefetch_factor = 2
+
+[trainer]
+max_iter        = 5000
+logging_iter    = 10
+grad_accum_iter = 1
+
+[trainer.callbacks.compile_tokenizer]
+enabled            = true
+warmup_resolutions = ["480"]
+
+[checkpoint]
+load_path = "${oc.env:BASE_CHECKPOINT_PATH}"
+save_iter = 500
+

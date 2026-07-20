@@ -30,6 +30,7 @@
   - [JSONL Dataset](./docs/dataset_jsonl.md)
 - [Inference](./docs/inference.md)
 - [Policy Server](./docs/action_policy_droid_server.md)
+- [SABER Stream 2 Action-Policy SFT](./docs/action_policy_saber_g1_sft.md)
 - Reference
   - [Code Structure](./docs/code_structure.md)
   - [Environment Variables](./docs/environment_variables.md)
@@ -96,4 +97,5 @@ See [Policy Server](./docs/action_policy_droid_server.md) for the full guide.
 | [Training](./docs/training.md)                               | Launching multi-GPU and multi-node runs; parallelism strategies; mixed precision; resuming.                              |
 | [Inference (from a trained checkpoint)](./docs/inference.md) | Loading a trained checkpoint into one of the inference backends.                                                         |
 | [Policy Server](./docs/action_policy_droid_server.md)        | Running the server-client pipeline for Cosmos3-Nano-Policy-DROID.                                                        |
+| [SABER Stream 2 SFT](./docs/action_policy_saber_g1_sft.md)    | Post-training Cosmos3-Nano on the released 72-D Unitree-G1 action stream.                                                |
 | [FAQ](./docs/faq.md)                                         | Troubleshooting (OOM, NCCL hangs, slow training), environment variables, and common pitfalls.                            |

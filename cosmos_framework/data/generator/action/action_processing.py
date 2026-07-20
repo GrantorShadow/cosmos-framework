@@ -70,6 +70,54 @@ class ActionAffineNormalization:
         return action * scale + offset  # [...,D]
 
 
+@dataclass(frozen=True)
+class QuaternionRenormalizingActionNormalizer:
+    """Compose an action normalizer with unit-quaternion output projection.
+
+    Training inputs are normalized exactly as supplied. During output
+    postprocessing, the selected quaternion channels are projected back onto
+    the unit sphere after the underlying affine denormalization. This keeps
+    generated absolute-pose actions valid without changing their training-time
+    channel contract.
+    """
+
+    normalizer: ActionNormalizer
+    quaternion_start: int = 3
+    quaternion_end: int = 7
+
+    def __post_init__(self) -> None:
+        if self.quaternion_start < 0 or self.quaternion_end <= self.quaternion_start:
+            raise ValueError(
+                "Quaternion slice must satisfy 0 <= quaternion_start < quaternion_end, "
+                f"got [{self.quaternion_start}:{self.quaternion_end}]"
+            )
+        if self.quaternion_end - self.quaternion_start != 4:
+            raise ValueError(
+                f"Quaternion slice must contain four channels, got [{self.quaternion_start}:{self.quaternion_end}]"
+            )
+
+    def normalize_action(self, action: torch.Tensor) -> torch.Tensor:
+        return self.normalizer.normalize_action(action)
+
+    def denormalize_action(self, action: torch.Tensor) -> torch.Tensor:
+        raw = self.normalizer.denormalize_action(action)
+        if raw.shape[-1] < self.quaternion_end:
+            raise ValueError(
+                f"Action width {raw.shape[-1]} does not contain quaternion slice "
+                f"[{self.quaternion_start}:{self.quaternion_end}]"
+            )
+        quaternion = raw[..., self.quaternion_start : self.quaternion_end]
+        quaternion = quaternion / quaternion.norm(dim=-1, keepdim=True).clamp(min=1e-8)
+        return torch.cat(
+            [
+                raw[..., : self.quaternion_start],
+                quaternion,
+                raw[..., self.quaternion_end :],
+            ],
+            dim=-1,
+        )
+
+
 def load_action_stats(stats_path: str, stats_key: str = "global") -> dict[str, np.ndarray]:
     """Load pre-computed action normalization stats from a JSON file."""
     path = Path(stats_path)

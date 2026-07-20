@@ -23,6 +23,7 @@ from cosmos_framework.data.generator.action.datasets.droid_lerobot_dataset impor
     DROIDLeRobotDataset,
 )
 from cosmos_framework.data.generator.action.datasets.libero_lerobot_dataset import LIBEROLeRobotDataset
+from cosmos_framework.data.generator.action.datasets.saber_g1_lerobot_dataset import SABERG1LeRobotDataset
 from cosmos_framework.data.generator.action.transforms import ActionTransformPipeline
 
 
@@ -39,7 +40,10 @@ class ActionSFTDataset(Dataset):
         return len(self._dataset)
 
     def __getitem__(self, idx: int) -> dict[str, Any]:
-        return self._transform(self._dataset[idx], self._resolution)
+        sample = self._dataset[idx]
+        get_action_normalizer = getattr(self._dataset, "get_action_normalizer", None)
+        action_normalizer = get_action_normalizer(sample) if callable(get_action_normalizer) else None
+        return self._transform(sample, self._resolution, action_normalizer=action_normalizer)
 
     def get_shuffle_blocks(self):
         """Delegate to the inner DROIDLeRobotDataset (per-episode/segment flat-index blocks)."""
@@ -214,6 +218,63 @@ def get_action_libero_sft_dataset(
         append_duration_fps_timestamps=append_duration_fps_timestamps,
         append_resolution_info=append_resolution_info,
         append_idle_frames=append_idle_frames,
+        format_prompt_as_json=format_prompt_as_json,
+    )
+    sft = ActionSFTDataset(dataset, transform, resolution)
+    if iterable_shuffle:
+        return ActionIterableShuffleDataset(sft, seed=episode_shuffle_seed)
+    return sft
+
+
+def get_action_saber_g1_sft_dataset(
+    *,
+    root: str,
+    fps: float = 15.0,
+    chunk_length: int = 32,
+    mode: str = "policy",
+    split: str = "train",
+    val_ratio: float = 0.05,
+    seed: int = 42,
+    action_normalization: str | None = "meanstd",
+    sample_stride: int = 1,
+    resolution: str | int | None = "480",
+    max_action_dim: int = 72,
+    tokenizer_config: dict | None = None,
+    cfg_dropout_rate: float = 0.1,
+    append_viewpoint_info: bool = True,
+    append_duration_fps_timestamps: bool = True,
+    append_resolution_info: bool = True,
+    format_prompt_as_json: bool = True,
+    iterable_shuffle: bool = False,
+    episode_shuffle_seed: int = 42,
+) -> Dataset:
+    """Build normalized SABER Stream 2 windows for Cosmos action-policy SFT.
+
+    ``root`` may point at either ``SABER-stream2`` itself or its ``SABER-10K``
+    parent.  The dataset prepends the current 72-D G1 state to 32 future
+    absolute action targets, while ``ActionTransformPipeline`` marks that
+    leading state as clean conditioning and normalizes the complete stream
+    with SABER's supplied action mean/std.
+    """
+    dataset = SABERG1LeRobotDataset(
+        root=root,
+        fps=fps,
+        chunk_length=chunk_length,
+        mode=mode,
+        split=split,
+        val_ratio=val_ratio,
+        seed=seed,
+        action_normalization=action_normalization,
+        sample_stride=sample_stride,
+    )
+    transform = ActionTransformPipeline(
+        tokenizer_config=tokenizer_config,
+        cfg_dropout_rate=cfg_dropout_rate,
+        max_action_dim=max_action_dim,
+        append_viewpoint_info=append_viewpoint_info,
+        append_duration_fps_timestamps=append_duration_fps_timestamps,
+        append_resolution_info=append_resolution_info,
+        append_idle_frames=False,
         format_prompt_as_json=format_prompt_as_json,
     )
     sft = ActionSFTDataset(dataset, transform, resolution)

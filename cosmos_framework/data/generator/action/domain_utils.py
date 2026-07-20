@@ -22,6 +22,7 @@ EMBODIMENT_TO_DOMAIN_ID: dict[str, int] = {
     "embodiment_c_gripper_ext": 15,
     "xdof_yam": 16,
     "molmoact2_yam": 16,  # MolmoAct2 uses the same YAM 20D FK action contract
+    "saber_g1": 17,
     "fractal": 20,
 }
 
@@ -42,6 +43,7 @@ EMBODIMENT_TO_RAW_ACTION_DIM: dict[str, int] = {
     "embodiment_c_gripper_ext": 29,
     "xdof_yam": 20,
     "molmoact2_yam": 20,
+    "saber_g1": 72,
     "fractal": 10,
     # NOTE: ``libero`` (7/10/13 depending on ``rotation_space``) and ``hand_pose``
     # (variable with ``keypoint_option`` and ``rotation_format``) are absent
