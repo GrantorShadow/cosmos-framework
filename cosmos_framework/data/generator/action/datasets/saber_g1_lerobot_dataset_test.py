@@ -98,7 +98,9 @@ def _make_stream2_root(tmp_path: Path) -> Path:
         {
             "observation.state": pa.array(state.tolist(), type=pa.list_(pa.float32())),
             "action": pa.array(action.tolist(), type=pa.list_(pa.float32())),
-            "timestamp": pa.array([i / 30.0 for i in range(5)], type=pa.float64()),
+            # Released episode parquets retain timestamps from their source
+            # trajectories even though each MP4 starts at episode-local t=0.
+            "timestamp": pa.array([5.0 + i / 30.0 for i in range(5)], type=pa.float64()),
             "task_index": pa.array([0] * 5, type=pa.int64()),
         }
     )
@@ -139,6 +141,32 @@ def test_saber_stream2_alignment_and_state_conditioning(tmp_path, monkeypatch):
     assert plan.condition_frame_indexes_vision == [0]
     assert plan.condition_frame_indexes_action == [0]
     assert plan.action_start_frame_offset == 0
+
+
+def test_saber_video_decode_uses_episode_local_timestamps(tmp_path, monkeypatch):
+    root = _make_stream2_root(tmp_path)
+    dataset = SABERG1LeRobotDataset(
+        root=str(root),
+        fps=15.0,
+        chunk_length=2,
+        split="full",
+        action_normalization=None,
+    )
+    decoded_timestamps = None
+
+    def _capture_timestamps(_episode_id: int, timestamps) -> torch.Tensor:
+        nonlocal decoded_timestamps
+        decoded_timestamps = timestamps.copy()
+        return torch.zeros((len(timestamps), 3, 8, 8), dtype=torch.float32)
+
+    monkeypatch.setattr(dataset, "_decode_video", _capture_timestamps)
+    dataset[0]
+
+    assert decoded_timestamps is not None
+    torch.testing.assert_close(
+        torch.from_numpy(decoded_timestamps),
+        torch.tensor([0.0, 2.0 / 30.0, 4.0 / 30.0], dtype=torch.float64),
+    )
 
 
 def test_saber_meanstd_normalization_and_quaternion_postprocess(tmp_path, monkeypatch):

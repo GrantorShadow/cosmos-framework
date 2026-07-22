@@ -37,6 +37,8 @@ unit length after denormalization.
 | Model experiment | `cosmos_framework/configs/base/experiment/action/posttrain_config/action_policy_saber_g1_nano.py` |
 | Run configuration | `examples/toml/sft_config/action_policy_saber_g1.toml` |
 | Launcher | `examples/launch_sft_action_policy_saber_g1.sh` |
+| Modal H100 debug/production app | `examples/modal_saber_g1.py` |
+| Experiment ledger | `docs/experiments/saber_g1.md` |
 
 ## Prepare inputs
 
@@ -51,7 +53,10 @@ hf download DreamVu/SABER-10K \
 ```
 
 Convert the public Nano checkpoint to DCP as described in
-[Training](./training.md#step-2--prepare-checkpoint), then export:
+[Training](./training.md#step-2--prepare-checkpoint), then export. In the Modal
+recipe this source is pinned to the public v2 midtraining checkpoint
+(`cosmos3_ga_16bm8b_v2_midtrain`, iteration 6000) instead of the mutable
+Hugging Face `main` branch:
 
 ```shell
 export DATASET_PATH=/data/SABER-10K/SABER-stream2
@@ -84,3 +89,100 @@ fresh 72-D action projections, a `5e-5` shared learning rate, and a 5× action
 head multiplier. These are starting values, not a published SABER/Cosmos
 reproduction.
 
+## Debug on one Modal H100
+
+The single-H100 Modal path is an integration and stability check with two
+training modes:
+
+- `--train-mode lora` (the default) enables rank-16 LoRA on the generation
+  transformer and trains the fresh 72-D action heads.
+- `--train-mode full` disables LoRA and trains the reference generation expert
+  plus the fresh action heads (about 6.98B parameters). It checkpoints each
+  whole transformer block, discarding its intermediate activations in the
+  forward pass and recomputing them during backward. EMA and tokenizer AOT
+  compilation are disabled. To fit one 80 GB H100 it uses fused PyTorch AdamW;
+  the final eight-H100 recipe uses the reference FusedAdam optimizer instead.
+
+Both modes use batch size one and are debug runs, so their training curves do
+not establish validation quality or replace the final distributed run.
+
+Install and authenticate Modal locally:
+
+```shell
+python3 -m pip install modal
+python3 -m modal setup
+```
+
+Create a Modal Secret named `cosmos-saber-secrets` containing `HF_TOKEN`.
+Add `WANDB_API_KEY` and optionally `WANDB_ENTITY` for online W&B; without the
+API key, the runner explicitly logs W&B offline on the persistent Volume. The
+dashboard secret editor is recommended so credentials do not enter shell
+history. The app creates and uses a persistent Volume named
+`cosmos-saber-data`. Its image clones the exact pushed SABER implementation
+commit from the public fork instead of uploading the surrounding local working
+tree.
+
+Prepare the dataset, VAE, and DCP checkpoint without billing GPU time:
+
+```shell
+modal run examples/modal_saber_g1.py --action prepare
+```
+
+Run the stages in order:
+
+```shell
+# Wiring check: model/data init, forward/backward, W&B, checkpoint.
+modal run examples/modal_saber_g1.py --action train --iterations 2
+
+# Short stability check. --detach keeps it alive if the local terminal exits.
+modal run --detach examples/modal_saber_g1.py --action train --iterations 20
+
+# Optional: exercises checkpoints at iterations 50 and 100.
+modal run --detach examples/modal_saber_g1.py --action train --iterations 100
+```
+
+For a no-LoRA activation-recomputation test, first run a two-step memory gate,
+then the longer curve only if it succeeds:
+
+```shell
+modal run examples/modal_saber_g1.py \
+  --action train --train-mode full --iterations 2 --require-wandb
+
+modal run --detach examples/modal_saber_g1.py \
+  --action train --train-mode full --iterations 200 --require-wandb
+```
+
+The debug runner scales the production schedule to the requested length: a
+10% warmup followed by linear decay through the final step. Thus a 200-step
+run uses 20 warmup steps instead of spending all 200 steps inside the
+production 500-step warmup. If a 33-frame sample exhausts H100 memory, retry
+the same stage with `--chunk-length 16`. Modal outputs persist under
+`/data/cosmos-runs` on the Volume, and online metrics appear in the
+`cosmos3_saber/modal_debug` W&B project/group.
+
+## Preflight on eight Modal H100s
+
+Before a long run, validate the fully resolved production configuration on CPU,
+then run the bounded two-step distributed gate:
+
+```shell
+modal run examples/modal_saber_g1.py \
+  --action validate-production --iterations 2 \
+  --run-name saber-g1-nano-8xh100-production-2step
+
+modal run examples/modal_saber_g1.py \
+  --action train-production --iterations 2 \
+  --run-name saber-g1-nano-8xh100-production-2step --require-wandb
+```
+
+This path uses the production topology and memory behavior: eight-way FSDP,
+batch 32 per rank (global batch 256), no LoRA, the reference FusedAdam with
+FP32 master weights, EMA, full-block activation recomputation, tokenizer AOT
+compilation, and the 500/5,000-step scheduler. Only the stop, save, logging,
+and device-monitor intervals are shortened for the gate. It starts from the
+pinned public Nano midtraining checkpoint rather than resuming a one-H100
+debug checkpoint. The normal tokenizer compilation callback begins after step
+3, so it is configured but not reached by this two-step gate.
+
+Results and exact run provenance are recorded in the
+[SABER Stream 2 experiment ledger](./experiments/saber_g1.md).

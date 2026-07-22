@@ -226,6 +226,7 @@ class OmniMoTModel(ImaginaireModel):
                     lora_rank=self.config.lora_rank,
                     lora_alpha=self.config.lora_alpha,
                     lora_target_modules=self.config.lora_target_modules,
+                    lora_additional_trainable_modules=self.config.lora_additional_trainable_modules,
                 )
 
         self.install_attention_dispatch(net)
@@ -4694,6 +4695,7 @@ class OmniMoTModel(ImaginaireModel):
         lora_rank: int,
         lora_alpha: int,
         lora_target_modules: str,
+        lora_additional_trainable_modules: str,
     ) -> torch.nn.Module:
         """Pre-FSDP LoRA injection — see :func:`inject_lora_pre_fsdp` for details."""
         from cosmos_framework.utils.generator.lora import inject_lora_pre_fsdp
@@ -4704,6 +4706,7 @@ class OmniMoTModel(ImaginaireModel):
             lora_rank=lora_rank,
             lora_alpha=lora_alpha,
             lora_target_modules=lora_target_modules,
+            additional_trainable_modules=lora_additional_trainable_modules,
         )
 
     def _init_lora_weights_post_materialization(self, network: torch.nn.Module) -> None:

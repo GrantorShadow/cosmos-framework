@@ -94,6 +94,7 @@ def inject_lora_pre_fsdp(
     lora_rank: int,
     lora_alpha: int,
     lora_target_modules: str,
+    additional_trainable_modules: str = "",
 ) -> torch.nn.Module:
     """Inject LoRA adapters into ``network`` BEFORE FSDP wrap on meta device.
 
@@ -107,8 +108,10 @@ def inject_lora_pre_fsdp(
     ``to_empty(device="cuda") + init_weights(buffer_device="cuda")``
     via ``init_lora_weights_post_materialization``.
 
-    Also freezes every non-LoRA parameter so the optimizer's
-    ``keys_to_select=["lora_"]`` filter trains adapters only.
+    Also freezes every non-LoRA parameter except those matching an optional
+    comma-separated ``additional_trainable_modules`` substring allowlist. This
+    supports LoRA plus fresh task heads while preserving LoRA-only behavior by
+    default.
     """
     assert network is not None, "Network is not initialized"
 
@@ -120,6 +123,7 @@ def inject_lora_pre_fsdp(
     target_modules_list = [m.strip() for m in lora_target_modules.split(",") if m.strip()]
     if not target_modules_list:
         raise ValueError("LoRA target_modules cannot be empty")
+    additional_trainable_list = [m.strip() for m in additional_trainable_modules.split(",") if m.strip()]
 
     model_module_names = {name.split(".")[-1] for name, _ in network.named_modules()}
     invalid_modules = [t for t in target_modules_list if t not in model_module_names]
@@ -137,20 +141,33 @@ def inject_lora_pre_fsdp(
         log.warning(f"LoRA injection replaced 0 modules — check lora_target_modules={lora_target_modules!r}")
 
     lora_params = 0
+    additional_trainable_params = 0
     frozen_params = 0
+    matched_additional_modules: set[str] = set()
     for name, param in network.named_parameters():
         if "lora_" in name:
             param.requires_grad_(True)
             lora_params += param.numel()
+        elif matching_modules := [m for m in additional_trainable_list if m in name]:
+            param.requires_grad_(True)
+            additional_trainable_params += param.numel()
+            matched_additional_modules.update(matching_modules)
         else:
             param.requires_grad_(False)
             frozen_params += param.numel()
 
+    unmatched_additional_modules = sorted(set(additional_trainable_list) - matched_additional_modules)
+    if unmatched_additional_modules:
+        log.warning(
+            f"Additional LoRA-trainable module patterns did not match model parameters: {unmatched_additional_modules}"
+        )
+
     log.info(
         f"LoRA injection successful: {replaced} modules wrapped, "
         f"{lora_params:,} trainable LoRA params, "
+        f"{additional_trainable_params:,} additional trainable params, "
         f"{frozen_params:,} frozen base params "
-        f"({100 * lora_params / max(1, lora_params + frozen_params):.3f}% trainable)"
+        f"({100 * (lora_params + additional_trainable_params) / max(1, lora_params + additional_trainable_params + frozen_params):.3f}% trainable)"
     )
     return network
 

@@ -31,9 +31,6 @@ save_ops_regex = ["fmha"]
 [model.tokenizer]
 vae_path = "${oc.env:WAN_VAE_PATH}"
 
-[model.rectified_flow_training_config]
-loss_scale = 10.0
-
 [optimizer]
 lr = 5.0e-05
 
@@ -43,11 +40,6 @@ warm_up_steps = [500]
 
 [dataloader_train]
 max_samples_per_batch = 32
-
-[dataloader_train.dataloader]
-num_workers     = 8
-batch_size      = 8
-prefetch_factor = 2
 
 [trainer]
 max_iter        = 5000
@@ -61,4 +53,3 @@ warmup_resolutions = ["480"]
 [checkpoint]
 load_path = "${oc.env:BASE_CHECKPOINT_PATH}"
 save_iter = 500
-

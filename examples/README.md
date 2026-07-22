@@ -18,3 +18,4 @@ This directory contains:
 | Reasoner Alignment SFT (Cosmos3-Nano)        | `launch_sft_videophy2_nano.sh`        |
 | Reasoner Alignment SFT (Cosmos3-Super)       | `launch_sft_videophy2_super.sh`       |
 | SABER Stream 2 G1 Action Policy              | `launch_sft_action_policy_saber_g1.sh` |
+| SABER Stream 2 Modal H100 Debug/Production   | `modal_saber_g1.py`                    |

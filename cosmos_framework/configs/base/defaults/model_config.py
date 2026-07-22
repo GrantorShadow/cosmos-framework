@@ -156,6 +156,9 @@ class OmniMoTModelConfig:
     lora_rank: int = 16
     lora_alpha: int = 32
     lora_target_modules: str = "q_proj_moe_gen,k_proj_moe_gen,v_proj_moe_gen,o_proj_moe_gen"
+    # Optional comma-separated parameter-name substrings to keep trainable
+    # alongside LoRA adapters (for example freshly initialized action heads).
+    lora_additional_trainable_modules: str = ""
 
     # Rectified flow configs
     rectified_flow_training_config: RectifiedFlowTrainingConfig = RectifiedFlowTrainingConfig()

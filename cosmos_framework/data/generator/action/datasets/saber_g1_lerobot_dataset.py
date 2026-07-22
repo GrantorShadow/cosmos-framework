@@ -200,7 +200,10 @@ class SABERG1LeRobotDataset(Dataset):
         future_actions = torch.from_numpy(episode["action"][action_indices].copy()).float()  # [T,72]
         action = torch.cat([initial_state.unsqueeze(0), future_actions], dim=0)  # [T+1,72]
 
-        timestamps = episode["timestamp"][video_indices]
+        # Each released MP4 is trimmed to its episode, but the parquet timestamp
+        # column retains time from the source trajectory. Decode with episode-
+        # local timestamps so row 0 maps to video frame 0.
+        timestamps = video_indices.astype(np.float64) / self._native_fps
         video = self._decode_video(episode_id, timestamps)  # [T+1,C,H,W], float [0,1] or uint8
         if video.ndim != 4:
             raise ValueError(f"Decoded SABER video must have shape [T,C,H,W], got {tuple(video.shape)}")
@@ -342,11 +345,10 @@ class SABERG1LeRobotDataset(Dataset):
         path = self._episode_data_path(episode_id)
         if not path.exists():
             raise FileNotFoundError(f"SABER episode parquet not found: {path}")
-        table = pq.read_table(path, columns=[_STATE_KEY, _ACTION_KEY, "timestamp", "task_index"])
+        table = pq.read_table(path, columns=[_STATE_KEY, _ACTION_KEY, "task_index"])
         episode = {
             "state": np.asarray(table[_STATE_KEY].to_pylist(), dtype=np.float32),
             "action": np.asarray(table[_ACTION_KEY].to_pylist(), dtype=np.float32),
-            "timestamp": table["timestamp"].to_numpy().astype(np.float64, copy=False),
             "task_index": table["task_index"].to_numpy().astype(np.int64, copy=False),
         }
         expected_length = int(self._episodes[episode_id]["length"])

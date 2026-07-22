@@ -375,6 +375,14 @@ class ModelConfig(BaseModel):
             "adapter. Defaults target the four MoE-gen projection matrices."
         ),
     )
+    lora_additional_trainable_modules: str = Field(
+        default="",
+        description=(
+            "Comma-separated parameter-name substrings kept trainable alongside "
+            "LoRA adapters. Use this for fresh task heads such as "
+            "'action2llm,llm2action,action_modality_embed'."
+        ),
+    )
 
     ema: EMAConfig = Field(default_factory=EMAConfig)
     parallelism: ParallelismConfig = Field(default_factory=ParallelismConfig)
