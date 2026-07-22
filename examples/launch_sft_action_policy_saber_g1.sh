@@ -7,7 +7,7 @@
 # DATASET_PATH may point at SABER-stream2 itself or the SABER-10K parent.
 # BASE_CHECKPOINT_PATH must be a converted Cosmos3-Nano DCP checkpoint.
 
-TOML_FILE="examples/toml/sft_config/action_policy_saber_g1.toml"
+: "${TOML_FILE:=examples/toml/sft_config/action_policy_saber_g1.toml}"
 : "${DATASET_PATH:=${SABER_ROOT:-examples/data/SABER-10K/SABER-stream2}}"
 : "${BASE_CHECKPOINT_PATH:=examples/checkpoints/Cosmos3-Nano}"
 

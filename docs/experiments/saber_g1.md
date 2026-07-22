@@ -118,3 +118,29 @@ credentials in this file.
   memory headroom and is the production baseline for the long run
 - Caveat: this validates distributed mechanics and memory, not convergence or
   held-out policy quality
+
+### 2026-07-21 — four-H100 Nano run, 50 iterations
+
+- Status: planned
+- Purpose: run approximately half an epoch on four H100s with production model
+  and optimizer behavior
+- Base: `nvidia/Cosmos3-Nano`, v2 midtrain iteration 6000, revision
+  `411f42a8fdfb8c5b2583cb8786e0938f49796eaa`
+- Topology: 4× H100, FSDP shard degree 4, replicate degree 1
+- Effective batch: 4 samples/rank × 4 ranks × accumulation 16 = 256
+- Duration: 50 optimizer iterations, approximately 0.52 training epochs
+- Training: no LoRA; 6,984,498,624 generation/action parameters; bfloat16;
+  full-block activation recomputation; EMA enabled
+- Optimizer: FusedAdam with FP32 master weights, weight decay `0.05`, betas
+  `[0.9, 0.99]`, epsilon `1e-8`, base LR `5e-5`, action-head LR `2.5e-4`
+- Scheduler: LambdaLinear, 500-step warmup, 5,000-step cycle, factors
+  `1e-6 → 1.0 → 0.0`
+- Dataset: 174 train episodes, 24,718 windows, 33 frames at 15 FPS, 32 future
+  actions, 72 channels, per-channel mean/std normalization
+- Logging: W&B every optimizer step, device memory every optimizer step, raw
+  launcher stdout/stderr, resolved config, and non-secret JSON run manifest
+- Checkpoints: iterations 25 and 50
+- Output: `/data/cosmos-runs/cosmos3_saber/four_h100_train/saber-g1-nano-4xh100-50iter`
+- W&B: pending
+- Modal: pending
+- Result: pending

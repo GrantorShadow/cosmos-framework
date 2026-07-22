@@ -19,3 +19,4 @@ This directory contains:
 | Reasoner Alignment SFT (Cosmos3-Super)       | `launch_sft_videophy2_super.sh`       |
 | SABER Stream 2 G1 Action Policy              | `launch_sft_action_policy_saber_g1.sh` |
 | SABER Stream 2 Modal H100 Debug/Production   | `modal_saber_g1.py`                    |
+| SABER Stream 2 Four-H100 Config              | `toml/sft_config/action_policy_saber_g1_4xh100.toml` |

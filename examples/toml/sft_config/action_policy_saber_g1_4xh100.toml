@@ -1,0 +1,55 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: OpenMDW-1.1
+
+# Cosmos3-Nano SABER Stream 2 training on one four-H100 Modal node.
+#
+# Required environment:
+#   SABER_ROOT=/path/to/SABER-10K/SABER-stream2
+#   BASE_CHECKPOINT_PATH=<Cosmos3-Nano DCP directory>
+#   WAN_VAE_PATH=<Wan2.2_VAE.pth>
+#   IMAGINAIRE_OUTPUT_ROOT=/path/to/output_root
+
+[job]
+task       = "vfm"
+experiment = "action_policy_saber_g1_nano"
+project    = "cosmos3_saber"
+group      = "four_h100_train"
+name       = "saber-g1-nano-4xh100-50iter"
+wandb_mode = "online"
+
+[model]
+precision = "bfloat16"
+
+[model.parallelism]
+data_parallel_shard_degree     = 4
+data_parallel_replicate_degree = 1
+
+[model.activation_checkpointing]
+mode           = "full"
+save_ops_regex = ["fmha"]
+
+[model.tokenizer]
+vae_path = "${oc.env:WAN_VAE_PATH}"
+
+[optimizer]
+lr = 5.0e-05
+
+[scheduler]
+cycle_lengths = [5000]
+warm_up_steps = [500]
+
+[dataloader_train]
+max_samples_per_batch = 4
+
+[trainer]
+max_iter        = 50
+logging_iter    = 1
+grad_accum_iter = 16
+
+[trainer.callbacks.compile_tokenizer]
+enabled            = true
+warmup_resolutions = ["480"]
+
+[checkpoint]
+load_path = "${oc.env:BASE_CHECKPOINT_PATH}"
+save_iter = 25

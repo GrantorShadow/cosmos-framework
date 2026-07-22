@@ -36,6 +36,7 @@ unit length after denormalization.
 | SFT wrapper | `cosmos_framework/data/generator/action/datasets/action_sft_dataset.py` |
 | Model experiment | `cosmos_framework/configs/base/experiment/action/posttrain_config/action_policy_saber_g1_nano.py` |
 | Run configuration | `examples/toml/sft_config/action_policy_saber_g1.toml` |
+| Four-H100 configuration | `examples/toml/sft_config/action_policy_saber_g1_4xh100.toml` |
 | Launcher | `examples/launch_sft_action_policy_saber_g1.sh` |
 | Modal H100 debug/production app | `examples/modal_saber_g1.py` |
 | Experiment ledger | `docs/experiments/saber_g1.md` |
@@ -189,3 +190,26 @@ step 2.
 
 Results and exact run provenance are recorded in the
 [SABER Stream 2 experiment ledger](./experiments/saber_g1.md).
+
+## Train for 50 iterations on four Modal H100s
+
+The four-GPU recipe preserves effective global batch 256 with four samples per
+rank and 16-way gradient accumulation. It keeps the Nano production optimizer,
+EMA, activation recomputation, tokenizer compilation, and 500/5,000-step
+schedule. Fifty optimizer steps cover approximately 0.52 training epochs and
+remain inside scheduler warmup.
+
+```shell
+modal run examples/modal_saber_g1.py \
+  --action validate-four-gpu --iterations 50 \
+  --run-name saber-g1-nano-4xh100-50iter
+
+modal run --detach examples/modal_saber_g1.py \
+  --action train-four-gpu --iterations 50 \
+  --run-name saber-g1-nano-4xh100-50iter --require-wandb
+```
+
+The persistent run directory contains `run_manifest.json` with immutable model,
+dataset, topology, batch, CLI, environment-path, and override arguments;
+`config.yaml` with the fully resolved training configuration; `logs/launcher.log`
+with raw stdout/stderr; W&B artifacts; and checkpoints at iterations 25 and 50.

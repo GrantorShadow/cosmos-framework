@@ -15,6 +15,9 @@ Modal Secret (required ``HF_TOKEN`` plus optional ``WANDB_API_KEY`` and
     modal run examples/modal_saber_g1.py --action validate-production --iterations 2
     modal run examples/modal_saber_g1.py --action train-production \
         --iterations 2 --require-wandb
+    modal run examples/modal_saber_g1.py --action validate-four-gpu --iterations 50
+    modal run --detach examples/modal_saber_g1.py --action train-four-gpu \
+        --iterations 50 --require-wandb
 """
 
 from __future__ import annotations
@@ -22,6 +25,7 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+from datetime import datetime, timezone
 from fractions import Fraction
 from pathlib import Path
 
@@ -36,6 +40,8 @@ SABER_ROOT = DATA_ROOT / "SABER-10K" / "SABER-stream2"
 VAE_PATH = DATA_ROOT / "checkpoints" / "wan22_vae" / "Wan2.2_VAE.pth"
 BASE_CHECKPOINT_PATH = DATA_ROOT / "checkpoints" / "Cosmos3-Nano"
 OUTPUT_ROOT = DATA_ROOT / "cosmos-runs"
+FOUR_GPU_GROUP = "four_h100_train"
+FOUR_GPU_TOML = "examples/toml/sft_config/action_policy_saber_g1_4xh100.toml"
 NANO_MIDTRAIN_REPOSITORY = "nvidia/Cosmos3-Nano"
 NANO_MIDTRAIN_REVISION = "411f42a8fdfb8c5b2583cb8786e0938f49796eaa"
 NANO_MIDTRAIN_EXPERIMENT = "cosmos3_ga_16bm8b_v2_midtrain"
@@ -264,6 +270,118 @@ def _production_training_env(iterations: int, run_name: str) -> dict[str, str]:
     ]
     env["EXTRA_TAIL_OVERRIDES"] = " ".join(overrides)
     return env
+
+
+def _four_gpu_training_env(iterations: int, run_name: str) -> dict[str, str]:
+    """Compose the four-H100 Nano run while preserving global batch 256."""
+    env = _base_training_env(nproc_per_node=4)
+    wandb_mode = "online" if env.get("WANDB_API_KEY") else "offline"
+    checkpoint_interval = max(1, iterations // 2)
+    run_dir = OUTPUT_ROOT / "cosmos3_saber" / FOUR_GPU_GROUP / run_name
+    env.update(
+        {
+            "LOG_FILENAME": "launcher.log",
+            "OUTPUT_ROOT": str(run_dir),
+            "TOML_FILE": FOUR_GPU_TOML,
+        }
+    )
+    overrides = [
+        "model.config.parallelism.data_parallel_shard_degree=4",
+        "model.config.parallelism.data_parallel_replicate_degree=1",
+        "model.config.activation_checkpointing.mode=full",
+        "model.config.lora_enabled=false",
+        "model.config.ema.enabled=true",
+        "model.config.tokenizer.encode_exact_durations=[33]",
+        "optimizer.optimizer_type=FusedAdam",
+        (
+            "optimizer.keys_to_select="
+            "[moe_gen,time_embedder,vae2llm,llm2vae,action2llm,llm2action,action_modality_embed]"
+        ),
+        "dataloader_train.max_samples_per_batch=4",
+        "trainer.grad_accum_iter=16",
+        "trainer.logging_iter=1",
+        "trainer.callbacks.device_monitor.every_n=1",
+        f"trainer.max_iter={iterations}",
+        "trainer.callbacks.compile_tokenizer.enabled=true",
+        "scheduler.warm_up_steps=[500]",
+        "scheduler.cycle_lengths=[5000]",
+        f"checkpoint.save_iter={checkpoint_interval}",
+        (
+            "checkpoint.keys_to_skip_loading="
+            "[net_ema.,action2llm,llm2action,action_modality_embed,action_pos_embed]"
+        ),
+        "job.project=cosmos3_saber",
+        f"job.group={FOUR_GPU_GROUP}",
+        f"job.name={run_name}",
+        f"job.wandb_mode={wandb_mode}",
+    ]
+    env["EXTRA_TAIL_OVERRIDES"] = " ".join(overrides)
+    return env
+
+
+def _write_four_gpu_manifest(env: dict[str, str], *, iterations: int, run_name: str) -> Path:
+    """Persist non-secret run arguments before GPU training starts."""
+    run_dir = OUTPUT_ROOT / "cosmos3_saber" / FOUR_GPU_GROUP / run_name
+    run_dir.mkdir(parents=True, exist_ok=True)
+    manifest_path = run_dir / "run_manifest.json"
+    manifest = {
+        "schema_version": 1,
+        "created_at_utc": datetime.now(timezone.utc).isoformat(),
+        "repository": {"url": REPO_URL, "commit": REPO_COMMIT},
+        "model": {
+            "repository": NANO_MIDTRAIN_REPOSITORY,
+            "revision": NANO_MIDTRAIN_REVISION,
+            "experiment": NANO_MIDTRAIN_EXPERIMENT,
+            "iteration": NANO_MIDTRAIN_ITERATION,
+            "variant": "Cosmos3-Nano",
+            "lora_enabled": False,
+            "selected_parameters": 6_984_498_624,
+        },
+        "dataset": {
+            "repository": "DreamVu/SABER-10K",
+            "subset": "SABER-stream2",
+            "root": str(SABER_ROOT),
+            "split": "train",
+            "episodes": 174,
+            "valid_windows": 24_718,
+            "chunk_length": 32,
+            "sampled_frames": 33,
+            "sampled_fps": 15.0,
+            "action_dim": 72,
+            "normalization": "meanstd",
+        },
+        "topology": {
+            "gpu": "H100",
+            "gpu_count": 4,
+            "fsdp_shard_degree": 4,
+            "fsdp_replicate_degree": 1,
+            "samples_per_rank_microbatch": 4,
+            "gradient_accumulation": 16,
+            "effective_global_batch": 256,
+        },
+        "run": {
+            "iterations": iterations,
+            "estimated_epochs": iterations * 256 / 24_718,
+            "project": "cosmos3_saber",
+            "group": FOUR_GPU_GROUP,
+            "name": run_name,
+            "toml": FOUR_GPU_TOML,
+            "command": ["bash", "examples/launch_sft_action_policy_saber_g1.sh"],
+            "output_dir": str(run_dir),
+            "raw_log": str(run_dir / "logs" / env["LOG_FILENAME"]),
+            "resolved_config": str(run_dir / "config.yaml"),
+        },
+        "environment": {
+            "base_checkpoint_path": str(BASE_CHECKPOINT_PATH),
+            "vae_path": str(VAE_PATH),
+            "nproc_per_node": env["NPROC_PER_NODE"],
+            "pytorch_alloc_conf": env["PYTORCH_ALLOC_CONF"],
+        },
+        "tail_overrides": env["EXTRA_TAIL_OVERRIDES"].split(),
+    }
+    manifest_path.write_text(json.dumps(manifest, indent=2) + "\n")
+    print(f"Run manifest: {manifest_path}")
+    return manifest_path
 
 
 @app.function(
@@ -516,6 +634,36 @@ def validate_production_preflight(
 
 
 @app.function(
+    cpu=4.0,
+    memory=16384,
+    timeout=30 * 60,
+    volumes={DATA_ROOT: data_volume},
+    secrets=[training_secret],
+)
+def validate_four_gpu(
+    iterations: int = 50,
+    run_name: str = "saber-g1-nano-4xh100-50iter",
+) -> None:
+    """Resolve the exact four-H100 training config without allocating GPUs."""
+    env = _four_gpu_training_env(iterations, run_name)
+    overrides = env["EXTRA_TAIL_OVERRIDES"].split()
+    _run(
+        [
+            "python",
+            "-m",
+            "cosmos_framework.scripts.train",
+            "--sft-toml",
+            FOUR_GPU_TOML,
+            "--dryrun",
+            "--",
+            *overrides,
+        ],
+        env,
+    )
+    print("SABER Stream 2 four-H100 config validated successfully.")
+
+
+@app.function(
     gpu="H100!",
     cpu=16.0,
     memory=131072,
@@ -596,6 +744,46 @@ def train_production_preflight(
     print(f"Training outputs committed under {OUTPUT_ROOT}/cosmos3_saber/production_preflight/{run_name}")
 
 
+@app.function(
+    gpu="H100:4",
+    cpu=64.0,
+    memory=262144,
+    timeout=24 * 60 * 60,
+    volumes={DATA_ROOT: data_volume},
+    secrets=[training_secret],
+)
+def train_four_gpu(
+    iterations: int = 50,
+    run_name: str = "saber-g1-nano-4xh100-50iter",
+    require_wandb: bool = True,
+) -> None:
+    """Run Nano SABER training on four H100s with complete provenance logs."""
+    if not 1 <= iterations <= 500:
+        raise ValueError(f"four-H100 iterations must be in [1, 500], got {iterations}")
+
+    env = _four_gpu_training_env(iterations, run_name)
+    wandb_mode = "online" if env.get("WANDB_API_KEY") else "offline"
+    if require_wandb and wandb_mode != "online":
+        raise RuntimeError(
+            "Online W&B logging was required, but WANDB_API_KEY is missing from "
+            "the cosmos-saber-secrets Modal Secret."
+        )
+
+    manifest_path = _write_four_gpu_manifest(env, iterations=iterations, run_name=run_name)
+    data_volume.commit()
+    print(f"Starting {iterations}-iteration four-H100 Nano run: {run_name}")
+    print(f"W&B mode: {wandb_mode}")
+    print(
+        "Pinned Nano midtrain; no LoRA; FSDP shard degree 4; FusedAdam with FP32 masters; "
+        "EMA enabled; full-block activation recomputation; 4 samples/rank with "
+        "accumulation 16 (effective global batch 256)."
+    )
+    print(f"Arguments and immutable provenance were committed to {manifest_path}")
+    _run(["bash", "examples/launch_sft_action_policy_saber_g1.sh"], env)
+    data_volume.commit()
+    print(f"Training outputs committed under {OUTPUT_ROOT}/cosmos3_saber/{FOUR_GPU_GROUP}/{run_name}")
+
+
 @app.local_entrypoint()
 def main(
     action: str = "train",
@@ -629,6 +817,11 @@ def main(
             iterations=iterations,
             run_name=run_name or "saber-g1-nano-8xh100-production-2step-ga2",
         )
+    elif action == "validate-four-gpu":
+        validate_four_gpu.remote(
+            iterations=iterations,
+            run_name=run_name or "saber-g1-nano-4xh100-50iter",
+        )
     elif action == "train":
         train.remote(
             iterations=iterations,
@@ -643,9 +836,16 @@ def main(
             run_name=run_name or "saber-g1-nano-8xh100-production-2step-ga2",
             require_wandb=require_wandb,
         )
+    elif action == "train-four-gpu":
+        train_four_gpu.remote(
+            iterations=iterations,
+            run_name=run_name or "saber-g1-nano-4xh100-50iter",
+            require_wandb=require_wandb,
+        )
     else:
         raise ValueError(
             "action must be 'prepare', 'inspect', 'test', 'inspect-wandb', 'audit-full', "
-            "'validate', 'validate-production', 'train', or 'train-production', "
+            "'validate', 'validate-production', 'validate-four-gpu', 'train', "
+            "'train-production', or 'train-four-gpu', "
             f"got {action!r}"
         )
