@@ -33,7 +33,7 @@ import modal
 
 APP_NAME = "cosmos-saber-g1"
 REPO_URL = "https://github.com/GrantorShadow/cosmos-framework.git"
-REPO_COMMIT = "634d91310676c05fed5edfca973bfc9016248210"
+REPO_COMMIT = "179197020a8b2f49880b443d408740f169a1cb28"
 REMOTE_REPO = Path("/workspace/cosmos-framework")
 DATA_ROOT = Path("/data")
 SABER_ROOT = DATA_ROOT / "SABER-10K" / "SABER-stream2"
