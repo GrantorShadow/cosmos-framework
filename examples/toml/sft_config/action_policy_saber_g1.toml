@@ -39,12 +39,12 @@ cycle_lengths = [5000]
 warm_up_steps = [500]
 
 [dataloader_train]
-max_samples_per_batch = 32
+max_samples_per_batch = 16
 
 [trainer]
 max_iter        = 5000
 logging_iter    = 10
-grad_accum_iter = 1
+grad_accum_iter = 2
 
 [trainer.callbacks.compile_tokenizer]
 enabled            = true

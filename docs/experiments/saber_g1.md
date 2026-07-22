@@ -63,19 +63,42 @@ credentials in this file.
 
 ### 2026-07-21 — eight-H100 production preflight, 2 steps
 
-- Status: pending
+- Status: failed during step 2 backward; no checkpoint written
 - Purpose: exercise the exact production topology and memory path before the
   long run
+- Training commit: `403db599c885a938f3f1ef7c3bddf164c5a25555`
+- Modal: <https://modal.com/apps/shauwnakjoshi/main/ap-I7x4sSkXh7aoT0o2KAxuaX>
+- W&B: <https://wandb.ai/tristar-ai/cosmos3_saber/runs/a0bw3tvp>
+- Topology: 8× H100, FSDP shard degree 8, replicate degree 1
+- Effective batch: 32 samples/rank × 8 ranks × accumulation 1 = 256
+- Training: no LoRA; generation/action parameters; full-block
+  activation recomputation; EMA enabled
+- Optimizer: FusedAdam, FP32 master weights, base LR `5e-5`, action-head
+  LR `2.5e-4`
+- Scheduler: production 500-step warmup, 5,000-step linear cycle
+- Step 1: completed on every rank in 163.4 seconds; finite per-rank loss range
+  19.746–30.399; synchronized pre-clip gradient norm 8.5625
+- Failure: step 2 recomputed backward requested another 1.47 GiB with only
+  0.13–0.68 GiB free per GPU; rank 0 reported 78.72/79.18 GiB in use
+- Conclusion: 32 samples/rank does not have safe headroom for variable packed
+  sequence lengths on 80 GB H100s
+- Known limit: tokenizer AOT compilation is enabled but its normal step-3
+  trigger is not reached by a two-step gate
+- Checkpoint: none
+
+### 2026-07-21 — eight-H100 production preflight retry, 2 steps
+
+- Status: pending
+- Purpose: preserve effective global batch 256 while reducing peak activation
+  memory after the 32×1 OOM
 - Planned topology: 8× H100, FSDP shard degree 8, replicate degree 1
-- Planned effective batch: 32 samples/rank × 8 ranks × accumulation 1 = 256
+- Planned effective batch: 16 samples/rank × 8 ranks × accumulation 2 = 256
 - Planned training: no LoRA; generation/action parameters; full-block
   activation recomputation; EMA enabled
 - Planned optimizer: FusedAdam, FP32 master weights, base LR `5e-5`, action-head
   LR `2.5e-4`
 - Planned scheduler: production 500-step warmup, 5,000-step linear cycle
-- Monitoring-only overrides: loss every step and device memory at step 2
-- Known limit: tokenizer AOT compilation is enabled but its normal step-3
-  trigger is not reached by a two-step gate
+- Monitoring-only overrides: loss and device memory every step
 - Planned checkpoint: step 2
 - W&B: pending
 - Result: pending

@@ -244,10 +244,10 @@ def _production_training_env(iterations: int, run_name: str) -> dict[str, str]:
             "optimizer.keys_to_select="
             "[moe_gen,time_embedder,vae2llm,llm2vae,action2llm,llm2action,action_modality_embed]"
         ),
-        "dataloader_train.max_samples_per_batch=32",
-        "trainer.grad_accum_iter=1",
+        "dataloader_train.max_samples_per_batch=16",
+        "trainer.grad_accum_iter=2",
         "trainer.logging_iter=1",
-        "trainer.callbacks.device_monitor.every_n=2",
+        "trainer.callbacks.device_monitor.every_n=1",
         f"trainer.max_iter={iterations}",
         "trainer.callbacks.compile_tokenizer.enabled=true",
         "scheduler.warm_up_steps=[500]",
@@ -494,7 +494,7 @@ def validate(
 )
 def validate_production_preflight(
     iterations: int = 2,
-    run_name: str = "saber-g1-nano-8xh100-production-2step",
+    run_name: str = "saber-g1-nano-8xh100-production-2step-ga2",
 ) -> None:
     """Compose the exact eight-H100 production preflight without allocating GPUs."""
     env = _production_training_env(iterations, run_name)
@@ -569,7 +569,7 @@ def train(
 )
 def train_production_preflight(
     iterations: int = 2,
-    run_name: str = "saber-g1-nano-8xh100-production-2step",
+    run_name: str = "saber-g1-nano-8xh100-production-2step-ga2",
     require_wandb: bool = True,
 ) -> None:
     """Run a bounded eight-H100 gate with the exact Nano production recipe."""
@@ -588,7 +588,8 @@ def train_production_preflight(
     print(f"W&B mode: {wandb_mode}")
     print(
         "No LoRA; FSDP shard degree 8; FusedAdam with FP32 masters; EMA enabled; "
-        "full-block activation recomputation; 32 samples/rank (global batch 256)."
+        "full-block activation recomputation; 16 samples/rank with accumulation 2 "
+        "(effective global batch 256)."
     )
     _run(["bash", "examples/launch_sft_action_policy_saber_g1.sh"], env)
     data_volume.commit()
@@ -626,7 +627,7 @@ def main(
     elif action == "validate-production":
         validate_production_preflight.remote(
             iterations=iterations,
-            run_name=run_name or "saber-g1-nano-8xh100-production-2step",
+            run_name=run_name or "saber-g1-nano-8xh100-production-2step-ga2",
         )
     elif action == "train":
         train.remote(
@@ -639,7 +640,7 @@ def main(
     elif action == "train-production":
         train_production_preflight.remote(
             iterations=iterations,
-            run_name=run_name or "saber-g1-nano-8xh100-production-2step",
+            run_name=run_name or "saber-g1-nano-8xh100-production-2step-ga2",
             require_wandb=require_wandb,
         )
     else:

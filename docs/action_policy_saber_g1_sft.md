@@ -168,21 +168,23 @@ then run the bounded two-step distributed gate:
 ```shell
 modal run examples/modal_saber_g1.py \
   --action validate-production --iterations 2 \
-  --run-name saber-g1-nano-8xh100-production-2step
+  --run-name saber-g1-nano-8xh100-production-2step-ga2
 
 modal run examples/modal_saber_g1.py \
   --action train-production --iterations 2 \
-  --run-name saber-g1-nano-8xh100-production-2step --require-wandb
+  --run-name saber-g1-nano-8xh100-production-2step-ga2 --require-wandb
 ```
 
 This path uses the production topology and memory behavior: eight-way FSDP,
-batch 32 per rank (global batch 256), no LoRA, the reference FusedAdam with
-FP32 master weights, EMA, full-block activation recomputation, tokenizer AOT
-compilation, and the 500/5,000-step scheduler. Only the stop, save, logging,
-and device-monitor intervals are shortened for the gate. It starts from the
-pinned public Nano midtraining checkpoint rather than resuming a one-H100
-debug checkpoint. The normal tokenizer compilation callback begins after step
-3, so it is configured but not reached by this two-step gate.
+16 samples per rank with accumulation 2 (effective global batch 256), no LoRA,
+the reference FusedAdam with FP32 master weights, EMA, full-block activation
+recomputation, tokenizer AOT compilation, and the 500/5,000-step scheduler.
+The 16×2 microbatch schedule replaces the original 32×1 starter after that
+configuration ran out of memory on the second backward pass of the eight-H100
+gate. Only the stop, save, logging, and device-monitor intervals are shortened.
+It starts from the pinned public Nano midtraining checkpoint rather than
+resuming a one-H100 debug checkpoint. The normal tokenizer compilation callback
+begins after step 3, so it is configured but not reached by this two-step gate.
 
 Results and exact run provenance are recorded in the
 [SABER Stream 2 experiment ledger](./experiments/saber_g1.md).
