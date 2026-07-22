@@ -183,8 +183,9 @@ The 16×2 microbatch schedule replaces the original 32×1 starter after that
 configuration ran out of memory on the second backward pass of the eight-H100
 gate. Only the stop, save, logging, and device-monitor intervals are shortened.
 It starts from the pinned public Nano midtraining checkpoint rather than
-resuming a one-H100 debug checkpoint. The normal tokenizer compilation callback
-begins after step 3, so it is configured but not reached by this two-step gate.
+resuming a one-H100 debug checkpoint. With accumulation 2, the gate reaches the
+third microbatch and exercises all 20 tokenizer AOT variants before optimizer
+step 2.
 
 Results and exact run provenance are recorded in the
 [SABER Stream 2 experiment ledger](./experiments/saber_g1.md).

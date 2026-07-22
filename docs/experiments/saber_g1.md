@@ -88,17 +88,33 @@ credentials in this file.
 
 ### 2026-07-21 — eight-H100 production preflight retry, 2 steps
 
-- Status: pending
+- Status: completed
 - Purpose: preserve effective global batch 256 while reducing peak activation
   memory after the 32×1 OOM
-- Planned topology: 8× H100, FSDP shard degree 8, replicate degree 1
-- Planned effective batch: 16 samples/rank × 8 ranks × accumulation 2 = 256
-- Planned training: no LoRA; generation/action parameters; full-block
+- Training commit: `634d91310676c05fed5edfca973bfc9016248210`
+- Modal runner commit: `3f0b2f4dce82b7b0130168b9f0bbd0b4f25db5a5`
+- Modal: <https://modal.com/apps/shauwnakjoshi/main/ap-s1dG1XMUajq4AsrfswL9Lu>
+- W&B: <https://wandb.ai/tristar-ai/cosmos3_saber/runs/w04pgxz9>
+- Topology: 8× H100, FSDP shard degree 8, replicate degree 1
+- Effective batch: 16 samples/rank × 8 ranks × accumulation 2 = 256
+- Training: no LoRA; 6,984,498,624 generation/action parameters; full-block
   activation recomputation; EMA enabled
-- Planned optimizer: FusedAdam, FP32 master weights, base LR `5e-5`, action-head
+- Optimizer: FusedAdam, FP32 master weights, base LR `5e-5`, action-head
   LR `2.5e-4`
-- Planned scheduler: production 500-step warmup, 5,000-step linear cycle
+- Scheduler: production 500-step warmup, 5,000-step linear cycle
 - Monitoring-only overrides: loss and device memory every step
-- Planned checkpoint: step 2
-- W&B: pending
-- Result: pending
+- W&B `train/loss`: 22.5915 → 22.5549
+- Per-rank loss range: 19.524–30.066 at step 1; 19.522–31.259 at step 2
+- Synchronized pre-clip gradient norm: 5.2500 → 4.84375
+- Base learning rate during warmup: `5.0e-11` → `1.0005e-7`
+- Peak memory at step 2: 54.92 GiB PyTorch allocated and 65.42 GiB maximum
+  NVML usage; minimum free memory across ranks 14.22 GiB
+- Tokenizer: all 20 AOT variants compiled and loaded across eight ranks in
+  85.6 seconds
+- Checkpoint save: completed in 61.2 seconds
+- Checkpoint:
+  `/data/cosmos-runs/cosmos3_saber/production_preflight/saber-g1-nano-8xh100-production-2step-ga2/checkpoints/iter_000000002`
+- Conclusion: the 16×2 configuration preserves global batch 256 with safe
+  memory headroom and is the production baseline for the long run
+- Caveat: this validates distributed mechanics and memory, not convergence or
+  held-out policy quality
