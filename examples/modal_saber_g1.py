@@ -29,7 +29,7 @@ import modal
 
 APP_NAME = "cosmos-saber-g1"
 REPO_URL = "https://github.com/GrantorShadow/cosmos-framework.git"
-REPO_COMMIT = "e3aeec46bcceb189476cfa14800f97989b000c69"
+REPO_COMMIT = "403db599c885a938f3f1ef7c3bddf164c5a25555"
 REMOTE_REPO = Path("/workspace/cosmos-framework")
 DATA_ROOT = Path("/data")
 SABER_ROOT = DATA_ROOT / "SABER-10K" / "SABER-stream2"
@@ -71,57 +71,6 @@ image = (
     )
     .workdir(str(REMOTE_REPO))
     .run_commands("uv sync --frozen --all-extras --group=cu130-train")
-    # Keep the public clone pinned while testing this uncommitted recipe fix.
-    .add_local_file(
-        "examples/toml/sft_config/action_policy_saber_g1.toml",
-        str(REMOTE_REPO / "examples/toml/sft_config/action_policy_saber_g1.toml"),
-        copy=True,
-    )
-    .add_local_file(
-        "cosmos_framework/configs/base/defaults/model_config.py",
-        str(REMOTE_REPO / "cosmos_framework/configs/base/defaults/model_config.py"),
-        copy=True,
-    )
-    .add_local_file(
-        "cosmos_framework/configs/toml_config/sft_config.py",
-        str(REMOTE_REPO / "cosmos_framework/configs/toml_config/sft_config.py"),
-        copy=True,
-    )
-    .add_local_file(
-        "cosmos_framework/configs/toml_config/toml_config_helper.py",
-        str(REMOTE_REPO / "cosmos_framework/configs/toml_config/toml_config_helper.py"),
-        copy=True,
-    )
-    .add_local_file(
-        "cosmos_framework/model/generator/omni_mot_model.py",
-        str(REMOTE_REPO / "cosmos_framework/model/generator/omni_mot_model.py"),
-        copy=True,
-    )
-    .add_local_file(
-        "cosmos_framework/utils/generator/lora.py",
-        str(REMOTE_REPO / "cosmos_framework/utils/generator/lora.py"),
-        copy=True,
-    )
-    .add_local_file(
-        "cosmos_framework/data/generator/action/datasets/saber_g1_lerobot_dataset.py",
-        str(REMOTE_REPO / "cosmos_framework/data/generator/action/datasets/saber_g1_lerobot_dataset.py"),
-        copy=True,
-    )
-    .add_local_file(
-        "cosmos_framework/data/generator/action/datasets/saber_g1_lerobot_dataset_test.py",
-        str(REMOTE_REPO / "cosmos_framework/data/generator/action/datasets/saber_g1_lerobot_dataset_test.py"),
-        copy=True,
-    )
-    .add_local_file(
-        "examples/inspect_wandb_run.py",
-        str(REMOTE_REPO / "examples/inspect_wandb_run.py"),
-        copy=True,
-    )
-    .add_local_file(
-        "examples/audit_dcp_params.py",
-        str(REMOTE_REPO / "examples/audit_dcp_params.py"),
-        copy=True,
-    )
 )
 
 app = modal.App(APP_NAME, image=image)
