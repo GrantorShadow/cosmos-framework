@@ -121,7 +121,7 @@ credentials in this file.
 
 ### 2026-07-21 — four-H100 Nano run, 50 iterations
 
-- Status: planned
+- Status: completed (2026-07-21 19:55–20:36 PDT; exit 0)
 - Purpose: run approximately half an epoch on four H100s with production model
   and optimizer behavior
 - Base: `nvidia/Cosmos3-Nano`, v2 midtrain iteration 6000, revision
@@ -139,8 +139,30 @@ credentials in this file.
   actions, 72 channels, per-channel mean/std normalization
 - Logging: W&B every optimizer step, device memory every optimizer step, raw
   launcher stdout/stderr, resolved config, and non-secret JSON run manifest
-- Checkpoints: iterations 25 and 50
+- Checkpoints: `checkpoints/iter_000000025` and
+  `checkpoints/iter_000000050`, both committed to the Modal Volume
 - Output: `/data/cosmos-runs/cosmos3_saber/four_h100_train/saber-g1-nano-4xh100-50iter`
-- W&B: pending
-- Modal: pending
-- Result: pending
+- Training recipe commit: `179197020a8b2f49880b443d408740f169a1cb28`
+- Modal runner commit: `a725971`
+- W&B: [run `7sv1wlul`](https://wandb.ai/tristar-ai/cosmos3_saber/runs/7sv1wlul)
+- Modal: [app `ap-FzgL8o0LRH7vdSTwZGd3UA`](https://modal.com/apps/shauwnakjoshi/main/ap-FzgL8o0LRH7vdSTwZGd3UA)
+- Result: all 50 optimizer iterations completed with finite loss and gradients;
+  checkpoint saves at iterations 25 and 50 took 87.02 and 73.23 seconds;
+  steady-state iterations were normally about 24 seconds
+- W&B audit: `train/loss` has 50 points and moved from `22.8285` to `19.1065`;
+  first-quarter mean `22.1347`, last-quarter mean `19.0924`; action
+  flow-matching first-quarter mean `1.9936`, last-quarter mean `1.6969`;
+  global pre-clip gradient norm mean `5.8406`, range `3.5625–9.7500`; final LR
+  `4.9000e-6`, correctly still inside the 500-step warmup
+- Memory: maximum observed NVML usage `66.87 GiB`; minimum free `12.77 GiB`
+  per GPU; no accumulating activation or allocator leak observed
+- Timing: Nano checkpoint load `203.44` seconds; AOT VAE warmup `96.51`
+  seconds; Modal app wall time about 41 minutes including final Volume commit
+- Known issues: the optional OFU callback cannot find the `mmaact` column in
+  Modal's `nvidia-smi dmon` output, so OFU metrics are unavailable; one W&B
+  GraphQL request timed out and recovered. Loss, LR, gradients, utilization,
+  device-memory logging, checkpoints, final W&B sync, and training were
+  unaffected
+- Conclusion: four-H100 production mechanics passed. This short run covered
+  about 0.52 epoch entirely within LR warmup, so it is not a convergence or
+  held-out policy-quality result
